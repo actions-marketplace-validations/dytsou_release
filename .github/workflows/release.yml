@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to publish (e.g. v1.0.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: GitHub Release
+        uses: ./github
+        with:
+          tag: ${{ inputs.tag }}
+          body: |
+            ## Release __TAG__
+
+            Composite Actions for **GitHub Release** and/or **npm publish** from a semver tag.
+
+            ### Usage
+
+            ```yaml
+            # GitHub only
+            - uses: dytsou/release/github@__MAJOR__
+
+            # npm only
+            - uses: dytsou/release/npm@__MAJOR__
+              with:
+                npm-token: ${{ '${{ secrets.NPM_TOKEN }}' }}
+
+            # Both
+            - uses: dytsou/release@__MAJOR__
+              with:
+                github-release: "true"
+                npm-publish: "true"
+                npm-token: ${{ '${{ secrets.NPM_TOKEN }}' }}
+            ```
+
+            Pin `@__MAJOR__` for floating updates within this major, or pin `@__TAG__` / a commit SHA in production.
+
+            Docs: [README](https://github.com/dytsou/release#readme) · [繁體中文](https://github.com/dytsou/release/blob/main/README-zh.md)

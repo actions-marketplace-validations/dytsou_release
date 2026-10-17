@@ -1,0 +1,142 @@
+name: Release (GitHub + npm)
+description: Create a GitHub Release and/or publish to npm from a semver tag. Prefer dytsou/release/github or dytsou/release/npm when you only need one.
+branding:
+  icon: rocket
+  color: blue
+
+inputs:
+  tag:
+    description: Tag to release (e.g. v1.2.3). Defaults to github.ref_name on tag push.
+    required: false
+    default: ""
+  body:
+    description: Extra GitHub release body. Placeholders __TAG__ and __MAJOR__ are expanded.
+    required: false
+    default: ""
+  generate-release-notes:
+    description: Let GitHub generate release notes
+    required: false
+    default: "true"
+  github-release:
+    description: Create a GitHub Release
+    required: false
+    default: "true"
+  move-major-tag:
+    description: Force-update major tag (v1) (skipped for prereleases; github-release only)
+    required: false
+    default: "true"
+  npm-publish:
+    description: Publish to the npm registry
+    required: false
+    default: "false"
+  npm-token:
+    description: npm auth token (required when npm-publish=true)
+    required: false
+    default: ""
+  npm-access:
+    description: npm publish --access
+    required: false
+    default: public
+  npm-tag:
+    description: npm dist-tag (empty = latest, or next for prereleases when left empty)
+    required: false
+    default: ""
+  working-directory:
+    description: Directory containing package.json for npm publish
+    required: false
+    default: "."
+  node-version:
+    description: Node.js version for npm publish
+    required: false
+    default: "24"
+  token:
+    description: GitHub token for release + major tag push
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  tag:
+    description: Resolved release tag
+    value: ${{ steps.resolve.outputs.tag }}
+  major:
+    description: Major tag (e.g. v1)
+    value: ${{ steps.resolve.outputs.major }}
+  prerelease:
+    description: Whether the tag is a prerelease
+    value: ${{ steps.resolve.outputs.prerelease }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve tag
+      id: resolve
+      shell: bash
+      env:
+        INPUT_TAG: ${{ inputs.tag }}
+        INPUT_BODY: ${{ inputs.body }}
+        GITHUB_REF_NAME: ${{ github.ref_name }}
+        GITHUB_EVENT_NAME: ${{ github.event_name }}
+      run: node "${{ github.action_path }}/lib/resolve-tag.mjs"
+
+    - name: Require at least one publish target
+      shell: bash
+      env:
+        GITHUB_RELEASE: ${{ inputs.github-release }}
+        NPM_PUBLISH: ${{ inputs.npm-publish }}
+      run: |
+        set -euo pipefail
+        if [[ "${GITHUB_RELEASE}" != "true" && "${NPM_PUBLISH}" != "true" ]]; then
+          echo "::error::Enable github-release and/or npm-publish (or use dytsou/release/github / dytsou/release/npm)"
+          exit 1
+        fi
+
+    - name: Create GitHub Release
+      if: inputs.github-release == 'true'
+      uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+      with:
+        token: ${{ inputs.token }}
+        tag_name: ${{ steps.resolve.outputs.tag }}
+        name: ${{ steps.resolve.outputs.tag }}
+        prerelease: ${{ steps.resolve.outputs.prerelease == 'true' }}
+        draft: false
+        generate_release_notes: ${{ inputs.generate-release-notes }}
+        body: ${{ steps.resolve.outputs.body }}
+
+    - name: Move major version tag
+      if: inputs.github-release == 'true' && inputs.move-major-tag == 'true' && steps.resolve.outputs.prerelease != 'true'
+      shell: bash
+      env:
+        INPUT_TAG: ${{ steps.resolve.outputs.tag }}
+        INPUT_MAJOR: ${{ steps.resolve.outputs.major }}
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: bash "${{ github.action_path }}/lib/move-major-tag.sh"
+
+    - name: Setup Node (npm publish)
+      if: inputs.npm-publish == 'true'
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        registry-url: https://registry.npmjs.org
+
+    - name: Publish to npm
+      if: inputs.npm-publish == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        NODE_AUTH_TOKEN: ${{ inputs.npm-token }}
+        NPM_ACCESS: ${{ inputs.npm-access }}
+        NPM_TAG_INPUT: ${{ inputs.npm-tag }}
+        PRERELEASE: ${{ steps.resolve.outputs.prerelease }}
+      run: |
+        set -euo pipefail
+        if [[ -z "${NODE_AUTH_TOKEN}" ]]; then
+          echo "::error::npm-token is required when npm-publish=true"
+          exit 1
+        fi
+        TAG_ARGS=()
+        if [[ -n "${NPM_TAG_INPUT}" ]]; then
+          TAG_ARGS=(--tag "${NPM_TAG_INPUT}")
+        elif [[ "${PRERELEASE}" == "true" ]]; then
+          TAG_ARGS=(--tag next)
+        fi
+        npm publish --access "${NPM_ACCESS}" "${TAG_ARGS[@]}"

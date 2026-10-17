@@ -1,0 +1,71 @@
+name: GitHub Release
+description: Create a GitHub Release from a semver tag and optionally move the major version tag.
+branding:
+  icon: tag
+  color: blue
+
+inputs:
+  tag:
+    description: Tag to release (e.g. v1.2.3). Defaults to github.ref_name on tag push.
+    required: false
+    default: ""
+  body:
+    description: Extra release body markdown. Placeholders __TAG__ and __MAJOR__ are expanded.
+    required: false
+    default: ""
+  generate-release-notes:
+    description: Let GitHub generate release notes
+    required: false
+    default: "true"
+  move-major-tag:
+    description: Force-update major tag (v1) to this release (skipped for prereleases)
+    required: false
+    default: "true"
+  token:
+    description: GitHub token for release + major tag push
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  tag:
+    description: Resolved release tag
+    value: ${{ steps.resolve.outputs.tag }}
+  major:
+    description: Major tag (e.g. v1)
+    value: ${{ steps.resolve.outputs.major }}
+  prerelease:
+    description: Whether the tag is a prerelease
+    value: ${{ steps.resolve.outputs.prerelease }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve tag
+      id: resolve
+      shell: bash
+      env:
+        INPUT_TAG: ${{ inputs.tag }}
+        INPUT_BODY: ${{ inputs.body }}
+        GITHUB_REF_NAME: ${{ github.ref_name }}
+        GITHUB_EVENT_NAME: ${{ github.event_name }}
+      run: node "${{ github.action_path }}/../lib/resolve-tag.mjs"
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+      with:
+        token: ${{ inputs.token }}
+        tag_name: ${{ steps.resolve.outputs.tag }}
+        name: ${{ steps.resolve.outputs.tag }}
+        prerelease: ${{ steps.resolve.outputs.prerelease == 'true' }}
+        draft: false
+        generate_release_notes: ${{ inputs.generate-release-notes }}
+        body: ${{ steps.resolve.outputs.body }}
+
+    - name: Move major version tag
+      if: inputs.move-major-tag == 'true' && steps.resolve.outputs.prerelease != 'true'
+      shell: bash
+      env:
+        INPUT_TAG: ${{ steps.resolve.outputs.tag }}
+        INPUT_MAJOR: ${{ steps.resolve.outputs.major }}
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: bash "${{ github.action_path }}/../lib/move-major-tag.sh"
