@@ -26,3 +26,4 @@ jobs:
         run: |
           node lib/resolve-tag.test.mjs
           node lib/sync-from-package-json.test.mjs
+          node lib/read-package-meta.test.mjs

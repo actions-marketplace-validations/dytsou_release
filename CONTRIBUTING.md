@@ -15,7 +15,7 @@ Please also read our [Code of Conduct](CODE_OF_CONDUCT.md).
 Pull requests are the best way to propose changes. We actively welcome your pull requests:
 
 1. Fork the repo and create your branch from `main`.
-2. If you've added code that should be tested, extend `lib/resolve-tag.test.mjs` (or add a focused check).
+2. If you've added code that should be tested, extend the matching `lib/*.test.mjs`.
 3. If you've changed Action inputs, outputs, or caller requirements, update `README.md` / `README-zh.md`.
 4. Run the local checks (see [Local development](#local-development)).
 5. Open that pull request!
@@ -26,27 +26,31 @@ This repository is a set of **composite GitHub Actions**:
 
 | Path | Role |
 | ---- | ---- |
-| `package-json/` | Sync tag from `package.json` + commit notes + GitHub Release |
-| `github/` | Create GitHub Release + optional major tag (`v1`) |
-| `npm/` | `npm publish` to the registry |
-| `./` (root) | Combined GitHub + npm entry |
-| `lib/` | Shared tag resolve / sync / major-tag helpers |
+| `github/` | GitHub Release + optional major tag + optional `from-package-json` |
+| `package-json/` | Preset for `from-package-json=true` |
+| `npm-publish/` | Publish to **npmjs** (skip if version exists) |
+| `github-packages/` | Publish to **GitHub Packages** (skip if version exists) |
+| `./` (root) | Combined entry (release + optional registry publishes) |
+| `lib/` | Shared helpers |
 
 Primary entries:
 
-- `dytsou/release/package-json@v1`
 - `dytsou/release/github@v1`
-- `dytsou/release/npm@v1`
-- `dytsou/release@v1` (combined; prefer pinning a commit SHA in production)
+- `dytsou/release/package-json@v1`
+- `dytsou/release/npm-publish@v1`
+- `dytsou/release/github-packages@v1`
+- `dytsou/release@v1` (prefer pinning a commit SHA in production)
 
 ## Local development
 
 ```bash
 node lib/resolve-tag.test.mjs
+node lib/sync-from-package-json.test.mjs
+node lib/read-package-meta.test.mjs
 ```
 
 > [!NOTE]
-> End-to-end GitHub Release / npm publish need a real repository and tokens; those paths are exercised in consumer CI.
+> End-to-end GitHub Release / registry publish need a real repository and tokens; those paths are exercised in consumer CI.
 
 ## Any contributions you make will be under the MIT Software License
 

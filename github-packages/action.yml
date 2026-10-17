@@ -1,0 +1,88 @@
+name: GitHub Packages Publish
+description: Publish package.json to GitHub Packages (skip if the version already exists).
+branding:
+  icon: package
+  color: gray-dark
+
+inputs:
+  token:
+    description: Token with packages:write (usually github.token)
+    required: false
+    default: ${{ github.token }}
+  package-json-path:
+    description: Path to package.json relative to the workspace
+    required: false
+    default: package.json
+  skip-if-exists:
+    description: Skip publish when this version already exists on GitHub Packages
+    required: false
+    default: "true"
+  install-deps:
+    description: Run pnpm install before publish
+    required: false
+    default: "true"
+  verify-pack:
+    description: Run pnpm pack as a publish dry-check
+    required: false
+    default: "true"
+  working-directory:
+    description: Directory containing package.json / lockfile
+    required: false
+    default: "."
+  node-version:
+    description: Node.js version
+    required: false
+    default: "24"
+
+outputs:
+  name:
+    description: Package name from package.json
+    value: ${{ steps.meta.outputs.name }}
+  version:
+    description: Package version from package.json
+    value: ${{ steps.meta.outputs.version }}
+  exists:
+    description: Whether the version already existed on GitHub Packages before publish
+    value: ${{ steps.publish.outputs.exists }}
+  skipped:
+    description: Whether publish was skipped
+    value: ${{ steps.publish.outputs.skipped }}
+  published:
+    description: Whether a new publish succeeded
+    value: ${{ steps.publish.outputs.published }}
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        registry-url: https://npm.pkg.github.com
+
+    - name: Setup pnpm
+      uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+    - name: Read package metadata
+      id: meta
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        INPUT_PACKAGE_JSON_PATH: ${{ inputs.package-json-path }}
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+      run: node "${{ github.action_path }}/../lib/read-package-meta.mjs"
+
+    - name: Publish to GitHub Packages
+      id: publish
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        INPUT_REGISTRY_KIND: github-packages
+        INPUT_PACKAGE_NAME: ${{ steps.meta.outputs.name }}
+        INPUT_PACKAGE_VERSION: ${{ steps.meta.outputs.version }}
+        INPUT_PACKAGE_SCOPE: ${{ steps.meta.outputs.scope }}
+        INPUT_SKIP_IF_EXISTS: ${{ inputs.skip-if-exists }}
+        INPUT_INSTALL_DEPS: ${{ inputs.install-deps }}
+        INPUT_VERIFY_PACK: ${{ inputs.verify-pack }}
+        NODE_AUTH_TOKEN: ${{ inputs.token }}
+      run: bash "${{ github.action_path }}/../lib/registry-publish.sh"

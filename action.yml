@@ -1,5 +1,5 @@
 name: Release (GitHub + npm)
-description: Create a GitHub Release and/or publish to npm from a semver tag.
+description: Create a GitHub Release and/or publish to npmjs / GitHub Packages.
 branding:
   icon: check-circle
   color: blue
@@ -18,7 +18,7 @@ inputs:
     required: false
     default: "false"
   package-json-path:
-    description: Path to package.json (from-package-json only)
+    description: Path to package.json
     required: false
     default: package.json
   create-missing-tag:
@@ -42,31 +42,35 @@ inputs:
     required: false
     default: "true"
   npm-publish:
-    description: Publish to the npm registry
+    description: Publish to npmjs (dytsou/release/npm-publish)
+    required: false
+    default: "false"
+  github-packages-publish:
+    description: Publish to GitHub Packages (dytsou/release/github-packages)
     required: false
     default: "false"
   npm-token:
-    description: npm auth token (required when npm-publish=true)
+    description: npmjs auth token (required when npm-publish=true)
     required: false
     default: ""
   npm-access:
-    description: npm publish --access
+    description: pnpm publish --access for npmjs
     required: false
     default: public
-  npm-tag:
-    description: npm dist-tag (empty = latest, or next for prereleases when left empty)
+  skip-if-exists:
+    description: Skip registry publish when the version already exists
     required: false
-    default: ""
+    default: "true"
   working-directory:
-    description: Directory containing package.json for npm publish
+    description: Directory containing package.json / lockfile for registry publish
     required: false
     default: "."
   node-version:
-    description: Node.js version for npm publish
+    description: Node.js version for registry publish
     required: false
     default: "24"
   token:
-    description: GitHub token for release + major tag push
+    description: GitHub token for release, major tag, and GitHub Packages
     required: false
     default: ${{ github.token }}
 
@@ -150,15 +154,16 @@ runs:
           } >>"$GITHUB_OUTPUT"
         fi
 
-    - name: Require at least one publish target
+    - name: Require at least one target
       shell: bash
       env:
         GITHUB_RELEASE: ${{ inputs.github-release }}
         NPM_PUBLISH: ${{ inputs.npm-publish }}
+        GH_PKG_PUBLISH: ${{ inputs.github-packages-publish }}
       run: |
         set -euo pipefail
-        if [[ "${GITHUB_RELEASE}" != "true" && "${NPM_PUBLISH}" != "true" ]]; then
-          echo "::error::Enable github-release and/or npm-publish (or use dytsou/release/github / dytsou/release/npm)"
+        if [[ "${GITHUB_RELEASE}" != "true" && "${NPM_PUBLISH}" != "true" && "${GH_PKG_PUBLISH}" != "true" ]]; then
+          echo "::error::Enable github-release, npm-publish, and/or github-packages-publish"
           exit 1
         fi
 
@@ -183,32 +188,55 @@ runs:
         GITHUB_TOKEN: ${{ inputs.token }}
       run: bash "${{ github.action_path }}/lib/move-major-tag.sh"
 
-    - name: Setup Node (npm publish)
-      if: inputs.npm-publish == 'true'
+    - name: Setup Node (registry publish)
+      if: inputs.npm-publish == 'true' || inputs.github-packages-publish == 'true'
       uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
       with:
         node-version: ${{ inputs.node-version }}
-        registry-url: https://registry.npmjs.org
 
-    - name: Publish to npm
+    - name: Setup pnpm (registry publish)
+      if: inputs.npm-publish == 'true' || inputs.github-packages-publish == 'true'
+      uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+    - name: Read package metadata (registry publish)
+      id: pkg
+      if: inputs.npm-publish == 'true' || inputs.github-packages-publish == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        INPUT_PACKAGE_JSON_PATH: ${{ inputs.package-json-path }}
+      run: node "${{ github.action_path }}/lib/read-package-meta.mjs"
+
+    - name: Publish to npmjs
+      id: npmjs
       if: inputs.npm-publish == 'true'
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
+        INPUT_REGISTRY_KIND: npmjs
+        INPUT_PACKAGE_NAME: ${{ steps.pkg.outputs.name }}
+        INPUT_PACKAGE_VERSION: ${{ steps.pkg.outputs.version }}
+        INPUT_PACKAGE_SCOPE: ${{ steps.pkg.outputs.scope }}
+        INPUT_NPM_ACCESS: ${{ inputs.npm-access }}
+        INPUT_SKIP_IF_EXISTS: ${{ inputs.skip-if-exists }}
+        INPUT_INSTALL_DEPS: "true"
+        INPUT_VERIFY_PACK: "true"
         NODE_AUTH_TOKEN: ${{ inputs.npm-token }}
-        NPM_ACCESS: ${{ inputs.npm-access }}
-        NPM_TAG_INPUT: ${{ inputs.npm-tag }}
-        PRERELEASE: ${{ steps.meta.outputs.prerelease }}
-      run: |
-        set -euo pipefail
-        if [[ -z "${NODE_AUTH_TOKEN}" ]]; then
-          echo "::error::npm-token is required when npm-publish=true"
-          exit 1
-        fi
-        TAG_ARGS=()
-        if [[ -n "${NPM_TAG_INPUT}" ]]; then
-          TAG_ARGS=(--tag "${NPM_TAG_INPUT}")
-        elif [[ "${PRERELEASE}" == "true" ]]; then
-          TAG_ARGS=(--tag next)
-        fi
-        npm publish --access "${NPM_ACCESS}" "${TAG_ARGS[@]}"
+      run: bash "${{ github.action_path }}/lib/registry-publish.sh"
+
+    - name: Publish to GitHub Packages
+      id: ghpkg
+      if: inputs.github-packages-publish == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        INPUT_REGISTRY_KIND: github-packages
+        INPUT_PACKAGE_NAME: ${{ steps.pkg.outputs.name }}
+        INPUT_PACKAGE_VERSION: ${{ steps.pkg.outputs.version }}
+        INPUT_PACKAGE_SCOPE: ${{ steps.pkg.outputs.scope }}
+        INPUT_SKIP_IF_EXISTS: ${{ inputs.skip-if-exists }}
+        # Avoid a second install when npmjs already installed deps in this job.
+        INPUT_INSTALL_DEPS: ${{ inputs.npm-publish == 'true' && 'false' || 'true' }}
+        INPUT_VERIFY_PACK: ${{ inputs.npm-publish == 'true' && 'false' || 'true' }}
+        NODE_AUTH_TOKEN: ${{ inputs.token }}
+      run: bash "${{ github.action_path }}/lib/registry-publish.sh"
