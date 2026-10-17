@@ -26,13 +26,15 @@ This repository is a set of **composite GitHub Actions**:
 
 | Path | Role |
 | ---- | ---- |
+| `package-json/` | Sync tag from `package.json` + commit notes + GitHub Release |
 | `github/` | Create GitHub Release + optional major tag (`v1`) |
 | `npm/` | `npm publish` to the registry |
-| `./` (root) | Combined entry that can run either or both |
-| `lib/` | Shared tag resolve / major-tag helpers |
+| `./` (root) | Combined GitHub + npm entry |
+| `lib/` | Shared tag resolve / sync / major-tag helpers |
 
 Primary entries:
 
+- `dytsou/release/package-json@v1`
 - `dytsou/release/github@v1`
 - `dytsou/release/npm@v1`
 - `dytsou/release@v1` (combined; prefer pinning a commit SHA in production)

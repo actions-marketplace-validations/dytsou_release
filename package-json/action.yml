@@ -1,0 +1,87 @@
+name: Release from package.json
+description: Convenience preset for dytsou/release/github with from-package-json=true.
+branding:
+  icon: file
+  color: blue
+
+inputs:
+  package-json-path:
+    description: Path to package.json relative to the workspace
+    required: false
+    default: package.json
+  body:
+    description: Extra release body markdown appended after commit notes (__TAG__ / __MAJOR__ expanded)
+    required: false
+    default: ""
+  create-missing-tag:
+    description: Create and push v{version} when the tag does not exist yet
+    required: false
+    default: "true"
+  commit-notes:
+    description: Prepend commit-list notes since previous tag
+    required: false
+    default: "true"
+  generate-release-notes:
+    description: Let GitHub generate release notes (in addition to commit notes body)
+    required: false
+    default: "true"
+  move-major-tag:
+    description: Force-update major tag (v1) to this release (skipped for prereleases)
+    required: false
+    default: "false"
+  token:
+    description: GitHub token for tag push, release, and major tag move
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  version:
+    description: package.json version (without leading v)
+    value: ${{ steps.sync.outputs.version }}
+  tag:
+    description: Resolved release tag
+    value: ${{ steps.sync.outputs.tag }}
+  major:
+    description: Major tag (e.g. v1)
+    value: ${{ steps.sync.outputs.major }}
+  prerelease:
+    description: Whether this is a prerelease
+    value: ${{ steps.sync.outputs.prerelease }}
+
+runs:
+  using: composite
+  steps:
+    # Same-repo relative composite reuse is not available to external callers;
+    # keep this preset as an explicit from-package-json=true path.
+    - name: Sync tag from package.json
+      id: sync
+      shell: bash
+      env:
+        INPUT_PACKAGE_JSON_PATH: ${{ inputs.package-json-path }}
+        INPUT_CREATE_MISSING_TAG: ${{ inputs.create-missing-tag }}
+        INPUT_COMMIT_NOTES: ${{ inputs.commit-notes }}
+        INPUT_BODY: ${{ inputs.body }}
+        GITHUB_REF: ${{ github.ref }}
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: node "${{ github.action_path }}/../lib/sync-from-package-json.mjs"
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+      with:
+        token: ${{ inputs.token }}
+        tag_name: ${{ steps.sync.outputs.tag }}
+        name: ${{ steps.sync.outputs.tag }}
+        prerelease: ${{ steps.sync.outputs.prerelease == 'true' }}
+        draft: false
+        generate_release_notes: ${{ inputs.generate-release-notes }}
+        body: ${{ steps.sync.outputs.body }}
+
+    - name: Move major version tag
+      if: inputs.move-major-tag == 'true' && steps.sync.outputs.prerelease != 'true'
+      shell: bash
+      env:
+        INPUT_TAG: ${{ steps.sync.outputs.tag }}
+        INPUT_MAJOR: ${{ steps.sync.outputs.major }}
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: bash "${{ github.action_path }}/../lib/move-major-tag.sh"

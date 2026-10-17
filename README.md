@@ -24,12 +24,45 @@ Create a **GitHub Release** and/or **publish to npm** from a semver tag (`v1.2.3
 1. **Checkout with history** — these Actions do not checkout. Use `fetch-depth: 0`.
 2. **Add a caller workflow** (tag push is the usual trigger):
 
-### GitHub Release only
+### From package.json (optional)
 
 ```yaml
 # .github/workflows/release.yml
 name: Release
 
+on:
+  push:
+    branches: [main]
+    paths: ["package.json"]
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: dytsou/release/github@v1
+        with:
+          from-package-json: "true"
+          create-missing-tag: "true"   # optional, default true
+          commit-notes: "true"         # optional, default true
+          move-major-tag: "false"
+```
+
+Or the convenience preset `dytsou/release/package-json@v1` (same as `from-package-json: "true"`).
+
+### GitHub Release only (tag already exists)
+
+```yaml
 on:
   push:
     tags: ["v*.*.*"]
@@ -39,9 +72,6 @@ on:
         description: Existing tag to publish (e.g. v1.0.0)
         required: true
         type: string
-
-permissions:
-  contents: read
 
 jobs:
   release:
@@ -66,7 +96,7 @@ jobs:
     npm-token: ${{ secrets.NPM_TOKEN }}
 ```
 
-### Both (root action)
+### Both GitHub + npm (root action)
 
 ```yaml
 - uses: dytsou/release@v1
@@ -80,23 +110,34 @@ jobs:
       Pin major tag `@__MAJOR__` for floating updates.
 ```
 
-3. **Push a tag** `v1.2.3` (or run `workflow_dispatch` with that tag).
+3. **Push a tag** `v1.2.3`, change `package.json` version on `main`, or run `workflow_dispatch`.
 
-Pin the major tag (`@v1`) for floating updates, or pin `@v1.0.0` / a commit SHA in production.
+Pin the major tag (`@v1`) for floating updates, or pin `@v1.1.0` / a commit SHA in production.
 
 ## Actions
 
 
 | Action | Purpose |
 | ------ | ------- |
-| `dytsou/release/github@v1` | GitHub Release + optional major tag move |
+| `dytsou/release/package-json@v1` | Read `package.json`, create missing tag, commit notes, GitHub Release |
+| `dytsou/release/github@v1` | GitHub Release + optional major tag move (tag must already exist) |
 | `dytsou/release/npm@v1` | `npm publish` |
-| `dytsou/release@v1` | Combined (toggle `github-release` / `npm-publish`) |
+| `dytsou/release@v1` | Combined GitHub + npm (toggle `github-release` / `npm-publish`) |
 
 ## Behavior
 
+### `package-json`
+
+1. Read `version` from `package.json`.
+2. On tag push, require tag `v{version}` to match `package.json`.
+3. Otherwise create and push `v{version}` when missing.
+4. Build commit-list release notes since the previous tag.
+5. Create the GitHub Release (`move-major-tag` defaults to `false`).
+
+### `github` / root / `npm`
+
 1. Resolve tag from input or `github.ref_name` (`vX.Y.Z`, optional prerelease suffix).
-2. **GitHub:** create the release; if not a prerelease, force-move major tag (`v1` → this tag).
+2. **GitHub:** create the release; if not a prerelease, force-move major tag (`v1` → this tag) when enabled.
 3. **npm:** `npm publish` (prereleases default to dist-tag `next` unless `npm-tag` is set).
 
 Body placeholders: `__TAG__`, `__MAJOR__`.

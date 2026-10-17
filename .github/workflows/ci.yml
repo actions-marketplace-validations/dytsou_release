@@ -22,5 +22,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Run resolve-tag unit checks
-        run: node lib/resolve-tag.test.mjs
+      - name: Run unit checks
+        run: |
+          node lib/resolve-tag.test.mjs
+          node lib/sync-from-package-json.test.mjs

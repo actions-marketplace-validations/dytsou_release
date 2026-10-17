@@ -1,18 +1,34 @@
 name: GitHub Release
-description: Create a GitHub Release from a semver tag and optionally move the major version tag.
+description: Create a GitHub Release from a semver tag; optionally sync the tag from package.json.
 branding:
   icon: tag
   color: blue
 
 inputs:
   tag:
-    description: Tag to release (e.g. v1.2.3). Defaults to github.ref_name on tag push.
+    description: Tag to release (e.g. v1.2.3). Defaults to github.ref_name on tag push. Ignored when from-package-json=true.
     required: false
     default: ""
   body:
     description: Extra release body markdown. Placeholders __TAG__ and __MAJOR__ are expanded.
     required: false
     default: ""
+  from-package-json:
+    description: Read version from package.json, optionally create the tag, and build commit notes
+    required: false
+    default: "false"
+  package-json-path:
+    description: Path to package.json (from-package-json only)
+    required: false
+    default: package.json
+  create-missing-tag:
+    description: Create and push v{version} when missing (from-package-json only)
+    required: false
+    default: "true"
+  commit-notes:
+    description: Prepend commit-list notes since previous tag (from-package-json only)
+    required: false
+    default: "true"
   generate-release-notes:
     description: Let GitHub generate release notes
     required: false
@@ -22,26 +38,30 @@ inputs:
     required: false
     default: "true"
   token:
-    description: GitHub token for release + major tag push
+    description: GitHub token for tag push, release, and major tag move
     required: false
     default: ${{ github.token }}
 
 outputs:
+  version:
+    description: package.json version when from-package-json=true
+    value: ${{ steps.meta.outputs.version }}
   tag:
     description: Resolved release tag
-    value: ${{ steps.resolve.outputs.tag }}
+    value: ${{ steps.meta.outputs.tag }}
   major:
     description: Major tag (e.g. v1)
-    value: ${{ steps.resolve.outputs.major }}
+    value: ${{ steps.meta.outputs.major }}
   prerelease:
     description: Whether the tag is a prerelease
-    value: ${{ steps.resolve.outputs.prerelease }}
+    value: ${{ steps.meta.outputs.prerelease }}
 
 runs:
   using: composite
   steps:
     - name: Resolve tag
       id: resolve
+      if: inputs.from-package-json != 'true'
       shell: bash
       env:
         INPUT_TAG: ${{ inputs.tag }}
@@ -50,22 +70,74 @@ runs:
         GITHUB_EVENT_NAME: ${{ github.event_name }}
       run: node "${{ github.action_path }}/../lib/resolve-tag.mjs"
 
+    - name: Sync tag from package.json
+      id: sync
+      if: inputs.from-package-json == 'true'
+      shell: bash
+      env:
+        INPUT_PACKAGE_JSON_PATH: ${{ inputs.package-json-path }}
+        INPUT_CREATE_MISSING_TAG: ${{ inputs.create-missing-tag }}
+        INPUT_COMMIT_NOTES: ${{ inputs.commit-notes }}
+        INPUT_BODY: ${{ inputs.body }}
+        GITHUB_REF: ${{ github.ref }}
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: node "${{ github.action_path }}/../lib/sync-from-package-json.mjs"
+
+    - name: Normalize outputs
+      id: meta
+      shell: bash
+      env:
+        FROM_PKG: ${{ inputs.from-package-json }}
+        RESOLVE_TAG: ${{ steps.resolve.outputs.tag }}
+        RESOLVE_MAJOR: ${{ steps.resolve.outputs.major }}
+        RESOLVE_PRERELEASE: ${{ steps.resolve.outputs.prerelease }}
+        RESOLVE_BODY: ${{ steps.resolve.outputs.body }}
+        SYNC_VERSION: ${{ steps.sync.outputs.version }}
+        SYNC_TAG: ${{ steps.sync.outputs.tag }}
+        SYNC_MAJOR: ${{ steps.sync.outputs.major }}
+        SYNC_PRERELEASE: ${{ steps.sync.outputs.prerelease }}
+        SYNC_BODY: ${{ steps.sync.outputs.body }}
+      run: |
+        set -euo pipefail
+        if [[ "${FROM_PKG}" == "true" ]]; then
+          echo "version=${SYNC_VERSION}" >>"$GITHUB_OUTPUT"
+          echo "tag=${SYNC_TAG}" >>"$GITHUB_OUTPUT"
+          echo "major=${SYNC_MAJOR}" >>"$GITHUB_OUTPUT"
+          echo "prerelease=${SYNC_PRERELEASE}" >>"$GITHUB_OUTPUT"
+          {
+            echo "body<<EOF"
+            echo "${SYNC_BODY}"
+            echo "EOF"
+          } >>"$GITHUB_OUTPUT"
+        else
+          echo "version=" >>"$GITHUB_OUTPUT"
+          echo "tag=${RESOLVE_TAG}" >>"$GITHUB_OUTPUT"
+          echo "major=${RESOLVE_MAJOR}" >>"$GITHUB_OUTPUT"
+          echo "prerelease=${RESOLVE_PRERELEASE}" >>"$GITHUB_OUTPUT"
+          {
+            echo "body<<EOF"
+            echo "${RESOLVE_BODY}"
+            echo "EOF"
+          } >>"$GITHUB_OUTPUT"
+        fi
+
     - name: Create GitHub Release
       uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
       with:
         token: ${{ inputs.token }}
-        tag_name: ${{ steps.resolve.outputs.tag }}
-        name: ${{ steps.resolve.outputs.tag }}
-        prerelease: ${{ steps.resolve.outputs.prerelease == 'true' }}
+        tag_name: ${{ steps.meta.outputs.tag }}
+        name: ${{ steps.meta.outputs.tag }}
+        prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
         draft: false
         generate_release_notes: ${{ inputs.generate-release-notes }}
-        body: ${{ steps.resolve.outputs.body }}
+        body: ${{ steps.meta.outputs.body }}
 
     - name: Move major version tag
-      if: inputs.move-major-tag == 'true' && steps.resolve.outputs.prerelease != 'true'
+      if: inputs.move-major-tag == 'true' && steps.meta.outputs.prerelease != 'true'
       shell: bash
       env:
-        INPUT_TAG: ${{ steps.resolve.outputs.tag }}
-        INPUT_MAJOR: ${{ steps.resolve.outputs.major }}
+        INPUT_TAG: ${{ steps.meta.outputs.tag }}
+        INPUT_MAJOR: ${{ steps.meta.outputs.major }}
         GITHUB_TOKEN: ${{ inputs.token }}
       run: bash "${{ github.action_path }}/../lib/move-major-tag.sh"
