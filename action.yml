@@ -1,5 +1,5 @@
 name: Release (GitHub + npm)
-description: Create a GitHub Release and/or publish to npm from a semver tag. Prefer dytsou/release/github or dytsou/release/npm when you only need one.
+description: Create a GitHub Release and/or publish to npm from a semver tag.
 branding:
   icon: rocket
   color: blue
