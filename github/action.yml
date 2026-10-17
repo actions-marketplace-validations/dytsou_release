@@ -98,29 +98,7 @@ runs:
         SYNC_MAJOR: ${{ steps.sync.outputs.major }}
         SYNC_PRERELEASE: ${{ steps.sync.outputs.prerelease }}
         SYNC_BODY: ${{ steps.sync.outputs.body }}
-      run: |
-        set -euo pipefail
-        if [[ "${FROM_PKG}" == "true" ]]; then
-          echo "version=${SYNC_VERSION}" >>"$GITHUB_OUTPUT"
-          echo "tag=${SYNC_TAG}" >>"$GITHUB_OUTPUT"
-          echo "major=${SYNC_MAJOR}" >>"$GITHUB_OUTPUT"
-          echo "prerelease=${SYNC_PRERELEASE}" >>"$GITHUB_OUTPUT"
-          {
-            echo "body<<EOF"
-            echo "${SYNC_BODY}"
-            echo "EOF"
-          } >>"$GITHUB_OUTPUT"
-        else
-          echo "version=" >>"$GITHUB_OUTPUT"
-          echo "tag=${RESOLVE_TAG}" >>"$GITHUB_OUTPUT"
-          echo "major=${RESOLVE_MAJOR}" >>"$GITHUB_OUTPUT"
-          echo "prerelease=${RESOLVE_PRERELEASE}" >>"$GITHUB_OUTPUT"
-          {
-            echo "body<<EOF"
-            echo "${RESOLVE_BODY}"
-            echo "EOF"
-          } >>"$GITHUB_OUTPUT"
-        fi
+      run: bash "${{ github.action_path }}/../lib/normalize-meta-outputs.sh"
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3

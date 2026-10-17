@@ -230,12 +230,7 @@ Body 佔位符：`__TAG__`、`__MAJOR__`。
 ### 本倉庫本地檢查
 
 ```bash
-node lib/resolve-tag.test.mjs
-node lib/sync-from-package-json.test.mjs
-node lib/read-package-meta.test.mjs
-node lib/resolve-pnpm-version.test.mjs
-node lib/bump-package-json.test.mjs
-node lib/check-action-paths.test.mjs
+node --test lib/*.test.mjs
 ```
 
 ## 支援
@@ -249,6 +244,8 @@ node lib/check-action-paths.test.mjs
 | `npm-token is required` / `token is required` | 對應 Action 缺少 secret |
 | Publish failed after install | registry 認證／package `name` scope 不符 |
 | `Version mismatch!` | tag 與 `package.json` 不一致（`from-package-json`） |
+| `Invalid npm package name` / `Invalid semver` | `package.json` 的 `name`/`version` 未通過 allowlist |
+| `body must not contain ${{ secrets` | release body 範本插到了 secrets — 請移除 |
 
 ## 貢獻
 
@@ -260,7 +257,10 @@ node lib/check-action-paths.test.mjs
 > **這些 Action 不會 checkout。** Caller 必須先以完整歷史 checkout。
 
 > [!WARNING]
-> 不要在 caller workflow 的 release **body** 範本裡寫 `${{ github.token }}` 或 `${{ secrets.* }}` — Actions 會把它們插值進公開的 release notes。
+> 不要在 caller workflow 的 release **body** 範本裡寫 `${{ github.token }}` 或 `${{ secrets.* }}` — Actions 會把它們插值進公開的 release notes。Action 會拒絕這類 expression，並 redact 常見的 `ghp_` / `github_pat_` 形狀。
+
+> [!NOTE]
+> `name` / `version` / tag / scope 在進入 shell 或 registry 前會做 allowlist 檢查。
 
 ## License
 

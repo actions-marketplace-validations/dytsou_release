@@ -12,8 +12,26 @@ SKIP_IF_EXISTS="${INPUT_SKIP_IF_EXISTS:-true}"
 INSTALL_DEPS="${INPUT_INSTALL_DEPS:-true}"
 VERIFY_PACK="${INPUT_VERIFY_PACK:-true}"
 
+# Trust-boundary allowlists (defense in depth; Node meta step validates first).
+if [[ ! "${PACKAGE_NAME}" =~ ^(@[A-Za-z0-9][A-Za-z0-9._-]*/)?[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+  echo "::error::Invalid package name for publish" >&2
+  exit 1
+fi
+if [[ ! "${PACKAGE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+  echo "::error::Invalid package version for publish" >&2
+  exit 1
+fi
+if [[ -n "${PACKAGE_SCOPE}" && ! "${PACKAGE_SCOPE}" =~ ^@[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+  echo "::error::Invalid package scope for publish" >&2
+  exit 1
+fi
+if [[ "${NPM_ACCESS}" != "public" && "${NPM_ACCESS}" != "restricted" ]]; then
+  echo "::error::npm-access must be public or restricted" >&2
+  exit 1
+fi
+
 if [[ -z "${NODE_AUTH_TOKEN}" ]]; then
-  echo "::error::token is required for ${REGISTRY_KIND}"
+  echo "::error::token is required for ${REGISTRY_KIND}" >&2
   exit 1
 fi
 
@@ -25,7 +43,7 @@ case "${REGISTRY_KIND}" in
     REGISTRY_URL="https://npm.pkg.github.com"
     ;;
   *)
-    echo "::error::Unknown registry-kind: ${REGISTRY_KIND}"
+    echo "::error::Unknown registry-kind: ${REGISTRY_KIND}" >&2
     exit 1
     ;;
 esac
@@ -87,5 +105,5 @@ if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version --registry="${REGISTRY_
 fi
 
 echo "published=false" >>"${GITHUB_OUTPUT}"
-echo "::error::Publish to ${REGISTRY_KIND} failed"
+echo "::error::Publish to ${REGISTRY_KIND} failed" >&2
 exit 1

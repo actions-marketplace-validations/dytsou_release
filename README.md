@@ -230,12 +230,7 @@ See each `action.yml`. Registry Actions share:
 ### Local smoke (this repository)
 
 ```bash
-node lib/resolve-tag.test.mjs
-node lib/sync-from-package-json.test.mjs
-node lib/read-package-meta.test.mjs
-node lib/resolve-pnpm-version.test.mjs
-node lib/bump-package-json.test.mjs
-node lib/check-action-paths.test.mjs
+node --test lib/*.test.mjs
 ```
 
 ## Support
@@ -249,6 +244,8 @@ node lib/check-action-paths.test.mjs
 | `npm-token is required` / `token is required` | Missing secret for that Action |
 | Publish failed after install | Registry auth / package `name` scope mismatch |
 | `Version mismatch!` | Tag does not match `package.json` (`from-package-json`) |
+| `Invalid npm package name` / `Invalid semver` | `package.json` `name`/`version` failed allowlist |
+| `body must not contain ${{ secrets` | Release body template interpolates secrets — remove them |
 
 ## Contributing
 
@@ -260,7 +257,10 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and our [Code o
 > **These Actions do not checkout.** Callers must checkout first with full history.
 
 > [!WARNING]
-> Do not put `${{ github.token }}` or `${{ secrets.* }}` literally inside release **body** templates in caller workflows — Actions will interpolate them into published notes.
+> Do not put `${{ github.token }}` or `${{ secrets.* }}` literally inside release **body** templates in caller workflows — Actions will interpolate them into published notes. The Action rejects those expression patterns in `body` and redacts common `ghp_` / `github_pat_` shapes from notes.
+
+> [!NOTE]
+> `name` / `version` / tag / scope are allowlisted before shell or registry use. Prefer normal npm names and semver.
 
 ## License
 

@@ -23,10 +23,4 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Run unit checks
-        run: |
-          node lib/resolve-tag.test.mjs
-          node lib/sync-from-package-json.test.mjs
-          node lib/read-package-meta.test.mjs
-          node lib/resolve-pnpm-version.test.mjs
-          node lib/bump-package-json.test.mjs
-          node lib/check-action-paths.test.mjs
+        run: node --test lib/*.test.mjs
