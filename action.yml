@@ -1,7 +1,7 @@
 name: Release (GitHub + npm)
 description: Create a GitHub Release and/or publish to npm from a semver tag.
 branding:
-  icon: rocket
+  icon: check-circle
   color: blue
 
 inputs:
