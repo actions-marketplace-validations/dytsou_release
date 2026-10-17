@@ -1,11 +1,15 @@
 # Release
 
-建立 **GitHub Release**，並／或從 `package.json`／semver tag **publish 套件**。
+建立 **GitHub Release**、**publish 套件**，並／或 **bump patch 版本**（從 `package.json`／semver tag）。
 
 Registry publish 拆成兩個 Action：
 
 - `dytsou/release/npm-publish` → **npmjs**
 - `dytsou/release/github-packages` → **GitHub Packages**
+
+版本 bump（開 PR）：
+
+- `dytsou/release/bump-patch-version` → bump `package.json` patch + PR
 
 [![GitHub release](https://img.shields.io/github/v/release/dytsou/release)](https://github.com/dytsou/release/releases)
 [![CI](https://github.com/dytsou/release/actions/workflows/ci.yml/badge.svg)](https://github.com/dytsou/release/actions/workflows/ci.yml)
@@ -111,6 +115,33 @@ jobs:
     move-major-tag: "false"
 ```
 
+### Bump patch 版本（開 PR）
+
+```yaml
+# .github/workflows/bump-patch-version.yml
+name: Bump patch version
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bumpPatchVersion:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: dytsou/release/bump-patch-version@v1
+```
+
 ### 合併 root action
 
 ```yaml
@@ -130,6 +161,7 @@ Major tag（`@v1`）會跟著同 major 浮動；固定版本請用 `@v1.2.0` 或
 
 | Action | 用途 |
 | ------ | ---- |
+| `dytsou/release/bump-patch-version@v1` | Bump `package.json` patch 並開 PR |
 | `dytsou/release/npm-publish@v1` | Publish 到 **npmjs**（版本已存在則跳過） |
 | `dytsou/release/github-packages@v1` | Publish 到 **GitHub Packages**（版本已存在則跳過） |
 | `dytsou/release/github@v1` | GitHub Release + 可選 major tag；可選 `from-package-json` |
@@ -137,6 +169,12 @@ Major tag（`@v1`）會跟著同 major 浮動；固定版本請用 `@v1.2.0` 或
 | `dytsou/release@v1` | 合併（release + 各 registry 開關） |
 
 ## 行為
+
+### `bump-patch-version`
+
+1. 若已有 tag，且 base branch 沒有比最新 tag 更新的 commit → 失敗。
+2. Bump `package.json` 的 patch（不跑 npm lifecycle scripts）。
+3. 開一張 PR。
 
 ### `npm-publish` / `github-packages`
 
@@ -177,14 +215,17 @@ Body 佔位符：`__TAG__`、`__MAJOR__`。
 `npm-publish` 另需 `npm-token`、`npm-access`。  
 `github-packages` 使用 `token`（預設 `github.token`）。
 
+`bump-patch-version` 輸入：`package-json-path`、`base-branch`、`labels`、`token`。
+
 ## Caller 契約
 
 ### 前置條件
 
-1. 呼叫前先 checkout（`fetch-depth: 0`）
+1. 呼叫前先 checkout（`fetch-depth: 0`；bump 另需 `fetch-tags: true`）
 2. GitHub Release／建 tag：`contents: write`
-3. GitHub Packages：`packages: write`（需要時加 `id-token: write`）
-4. npmjs：`NPM_TOKEN` secret
+3. Bump PR：`contents: write` + `pull-requests: write`
+4. GitHub Packages：`packages: write`（需要時加 `id-token: write`）
+5. npmjs：`NPM_TOKEN` secret
 
 ### 本倉庫本地檢查
 
@@ -193,6 +234,7 @@ node lib/resolve-tag.test.mjs
 node lib/sync-from-package-json.test.mjs
 node lib/read-package-meta.test.mjs
 node lib/resolve-pnpm-version.test.mjs
+node lib/bump-package-json.test.mjs
 ```
 
 ## 支援

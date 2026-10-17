@@ -1,11 +1,15 @@
 # Release
 
-Create a **GitHub Release** and/or **publish packages** from `package.json` / a semver tag.
+Create a **GitHub Release**, **publish packages**, and/or **bump the patch version** from `package.json` / a semver tag.
 
 Registry publish is split into two Actions:
 
 - `dytsou/release/npm-publish` → **npmjs**
 - `dytsou/release/github-packages` → **GitHub Packages**
+
+Version bump (opens a PR):
+
+- `dytsou/release/bump-patch-version` → bump `package.json` patch + PR
 
 [![GitHub release](https://img.shields.io/github/v/release/dytsou/release)](https://github.com/dytsou/release/releases)
 [![CI](https://github.com/dytsou/release/actions/workflows/ci.yml/badge.svg)](https://github.com/dytsou/release/actions/workflows/ci.yml)
@@ -111,6 +115,33 @@ jobs:
     move-major-tag: "false"
 ```
 
+### Bump patch version (opens a PR)
+
+```yaml
+# .github/workflows/bump-patch-version.yml
+name: Bump patch version
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bumpPatchVersion:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: dytsou/release/bump-patch-version@v1
+```
+
 ### Combined root action
 
 ```yaml
@@ -130,6 +161,7 @@ Pin `@v1` for floating updates, or pin `@v1.2.0` / a commit SHA in production.
 
 | Action | Purpose |
 | ------ | ------- |
+| `dytsou/release/bump-patch-version@v1` | Bump `package.json` patch version and open a PR |
 | `dytsou/release/npm-publish@v1` | Publish to **npmjs** (skip if version exists) |
 | `dytsou/release/github-packages@v1` | Publish to **GitHub Packages** (skip if version exists) |
 | `dytsou/release/github@v1` | GitHub Release + optional major tag; optional `from-package-json` |
@@ -137,6 +169,12 @@ Pin `@v1` for floating updates, or pin `@v1.2.0` / a commit SHA in production.
 | `dytsou/release@v1` | Combined (toggles for release + each registry) |
 
 ## Behavior
+
+### `bump-patch-version`
+
+1. Fail if the base branch has no commits after the latest tag (when tags exist).
+2. Bump the patch segment in `package.json` (no npm lifecycle scripts).
+3. Open a pull request with the change.
 
 ### `npm-publish` / `github-packages`
 
@@ -177,14 +215,17 @@ See each `action.yml`. Registry Actions share:
 `npm-publish` also takes `npm-token`, `npm-access`.  
 `github-packages` takes `token` (default `github.token`).
 
+`bump-patch-version` inputs: `package-json-path`, `base-branch`, `labels`, `token`.
+
 ## Caller contract
 
 ### Prerequisites
 
-1. Checkout before calling (`fetch-depth: 0`)
+1. Checkout before calling (`fetch-depth: 0`; bump also needs `fetch-tags: true`)
 2. GitHub Release / tag create: `contents: write`
-3. GitHub Packages: `packages: write` (+ `id-token: write` if needed)
-4. npmjs: `NPM_TOKEN` secret
+3. Bump PR: `contents: write` + `pull-requests: write`
+4. GitHub Packages: `packages: write` (+ `id-token: write` if needed)
+5. npmjs: `NPM_TOKEN` secret
 
 ### Local smoke (this repository)
 
@@ -193,6 +234,7 @@ node lib/resolve-tag.test.mjs
 node lib/sync-from-package-json.test.mjs
 node lib/read-package-meta.test.mjs
 node lib/resolve-pnpm-version.test.mjs
+node lib/bump-package-json.test.mjs
 ```
 
 ## Support
