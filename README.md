@@ -235,6 +235,7 @@ node lib/sync-from-package-json.test.mjs
 node lib/read-package-meta.test.mjs
 node lib/resolve-pnpm-version.test.mjs
 node lib/bump-package-json.test.mjs
+node lib/check-action-paths.test.mjs
 ```
 
 ## Support
