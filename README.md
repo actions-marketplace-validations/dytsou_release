@@ -172,6 +172,7 @@ See each `action.yml`. Registry Actions share:
 | `verify-pack` | `true` | Run `pnpm pack` before publish |
 | `package-json-path` | `package.json` | Manifest path |
 | `working-directory` | `.` | Package root |
+| `pnpm-version` | _(empty)_ | pnpm for `pnpm/action-setup`; empty uses `packageManager`, else `10` |
 
 `npm-publish` also takes `npm-token`, `npm-access`.  
 `github-packages` takes `token` (default `github.token`).
@@ -191,6 +192,7 @@ See each `action.yml`. Registry Actions share:
 node lib/resolve-tag.test.mjs
 node lib/sync-from-package-json.test.mjs
 node lib/read-package-meta.test.mjs
+node lib/resolve-pnpm-version.test.mjs
 ```
 
 ## Support

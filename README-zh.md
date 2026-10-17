@@ -172,6 +172,7 @@ Body 佔位符：`__TAG__`、`__MAJOR__`。
 | `verify-pack` | `true` | publish 前執行 `pnpm pack` |
 | `package-json-path` | `package.json` | manifest 路徑 |
 | `working-directory` | `.` | 套件根目錄 |
+| `pnpm-version` | _(空)_ | 給 `pnpm/action-setup` 的版本；空則用 `packageManager`，否則 `10` |
 
 `npm-publish` 另需 `npm-token`、`npm-access`。  
 `github-packages` 使用 `token`（預設 `github.token`）。
@@ -191,6 +192,7 @@ Body 佔位符：`__TAG__`、`__MAJOR__`。
 node lib/resolve-tag.test.mjs
 node lib/sync-from-package-json.test.mjs
 node lib/read-package-meta.test.mjs
+node lib/resolve-pnpm-version.test.mjs
 ```
 
 ## 支援
